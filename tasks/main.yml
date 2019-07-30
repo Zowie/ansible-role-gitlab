@@ -10,6 +10,11 @@
   stat: path=/usr/bin/gitlab-ctl
   register: gitlab_file
 
+- name: Apt update
+  apt:
+    update_cache: yes
+  when: ansible_os_family == 'Debian'
+
 # Install GitLab and its dependencies.
 - name: Install GitLab dependencies.
   package: name={{ item }} state=present
@@ -19,6 +24,7 @@
     - curl
     - openssl
     - tzdata
+    - redis-server
 
 - name: Download GitLab repository installation script.
   get_url:
@@ -28,8 +34,14 @@
   when: not gitlab_file.stat.exists
 
 - name: Install GitLab repository.
+  become: yes
   command: bash /tmp/gitlab_install_repository.sh
   when: not gitlab_file.stat.exists
+
+# Required if there's no init system to start them (like in Docker)
+- name: Run Gitlab services
+  command: /opt/gitlab/embedded/bin/runsvdir-start >/dev/null 2>&1 &
+  when: ansible_facts["virtualization_type"] == "Docker" # No easy (more precise) way to detect missing init system afaik
 
 - name: Define the Gitlab package name.
   set_fact:
